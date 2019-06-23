@@ -43,3 +43,10 @@ For updating the CRON jobs
 ```sh
 $  python main.py --update_cron <PATH to python executable>
 ```
+
+### Output
+Output files are generated at the ROOT folder. The default output file names are 'ist_summary.csv' and 'ist_detail.csv'
+
+
+### Settings
+Certain initializations are done in the settings.py file in the Root directory. The user can change the default values with the values of his liking.
