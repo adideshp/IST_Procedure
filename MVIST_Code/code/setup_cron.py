@@ -74,8 +74,16 @@ def schedule(username, prob_filename, python_path):
     #Clear all the previous cron-tabs
     cron.remove_all()
     cron.write()
+    
     for job in jobs:
         command = python_path + " " + dir_path + '/main.py --perform_ist ' + job[0]
         schedules = gen_exec_cron(job[1], job[2], cron, command)
     return schedules
     
+
+if __name__ == '__main__':
+    cron = CronTab(user='ubuntu')
+    cron.remove_all()
+    cron.write()
+
+

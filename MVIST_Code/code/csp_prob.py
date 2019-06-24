@@ -30,8 +30,8 @@ class CSP_Prob(Strategy):
         self.transfer = zeros([len(self.store_map), len(self.store_map)])
 
         #Output Datastructure
-        self.report_skuwise = []
-        self.report_summary = []
+        self.report_skuwise = {}
+        self.report_summary = {}
 
 
         with open(inventory_filename) as csv_file:
@@ -150,6 +150,14 @@ class CSP_Prob(Strategy):
             #Available units are more than required. transfer all that are required
             transfer_units = abs(self.requirement[deficit_sku, deficit_shop_index])
         return transfer_units
+
+
+    def check_total_transfers(self, total_transfers, transactions, whr):
+        mysum = 0
+        for tx in transactions:
+            mysum += tx[1]
+        if mysum != total_transfers:
+            print("############ERROR in   " + str(whr))
             
 
     def get_ist_estimate(self, deficit_shop_index, excess_shop_index, candidate_sku_index, qty_limit):
@@ -165,6 +173,7 @@ class CSP_Prob(Strategy):
         total_ist_qty =  self.get_transferable_units(candidate_sku_index, excess_shop_index, deficit_shop_index)
         if total_ist_qty > qty_limit:
             transactions.append((candidate_sku_index, qty_limit)) #Tranfer qty_limit number of units
+            self.check_total_transfers(qty_limit, transactions,4)
             return qty_limit, transactions, True
         
         #No units available for the transfer
@@ -173,13 +182,13 @@ class CSP_Prob(Strategy):
         
         # Items transfered are less than qty_limit. Still scope to transfer items.
         transactions.append((candidate_sku_index, total_ist_qty))
-        
+        #import pdb; pdb.set_trace()
         #Update the quantity limit to represent total units required.
         qty_limit -= total_ist_qty 
 
         #Check for previous transfers in these 2 shops
         if qty_limit < 45:
-            return qty_limit, transactions, True
+            return total_ist_qty, transactions, True
 
         #Atleast 5 units should be transfered between 2 shops for Successful IST
         reqd_units_for_sucess = 5 - (50 - qty_limit)
@@ -194,13 +203,21 @@ class CSP_Prob(Strategy):
                 continue
             if deficit_sku in dest_excess_sku and secondary_ist_qty < reqd_units_for_sucess:
                 transfer_units = self.get_transferable_units(deficit_sku, excess_shop_index, deficit_shop_index)          
-                
                 #If more units than required are available, transfer all the required units
-                if (secondary_ist_qty + transfer_units > reqd_units_for_sucess):
+                if (secondary_ist_qty + transfer_units >= reqd_units_for_sucess):
                     transfer_units = reqd_units_for_sucess - secondary_ist_qty
-                    transactions.append((deficit_sku, transfer_units)) #Storing all the possible transfers
-                    secondary_ist_qty += transfer_units
-                    return total_ist_qty + secondary_ist_qty, transactions, True
+                    transactions.append((deficit_sku, transfer_units))
+
+                    self.check_total_transfers(total_ist_qty + secondary_ist_qty + transfer_units, transactions,1)
+                    return total_ist_qty + secondary_ist_qty + transfer_units, transactions, True
+
+                
+                reqd_units_for_sucess -= transfer_units
+                transactions.append((deficit_sku, transfer_units)) #Storing all the possible transfers
+                secondary_ist_qty += transfer_units
+                self.check_total_transfers(total_ist_qty + secondary_ist_qty, transactions,2)
+
+                    
         
         #IST is not possible
         return 0, [], False
@@ -230,6 +247,7 @@ class CSP_Prob(Strategy):
             #Amongst all the SKUs now check if: all the transfers can lead to item_qyty >=5
             items_transferred, transcations, ist_successful = self.get_ist_estimate(max_prob_shop_index, source_shop_index, candidate_sku_index, qty_limit) 
             if  ist_successful:
+                self.check_total_transfers(items_transferred, transcations, 3)
                 return max_prob_shop_index, transcations, items_transferred     
             
             #Look for next max_prob_shop
@@ -237,6 +255,22 @@ class CSP_Prob(Strategy):
         
         #No valid shop found 
         return -1, [], 0
+
+
+    def add_to_report(self, source_store, dest_store, sku, qty):
+        if source_store in self.report_skuwise.keys():
+            if dest_store in self.report_skuwise[source_store].keys():
+                if sku in self.report_skuwise[source_store][dest_store].keys():
+                    self.report_skuwise[source_store][dest_store][sku] += qty
+                else:
+                    self.report_skuwise[source_store][dest_store][sku] = qty
+            else:
+                self.report_skuwise[source_store][dest_store] = {}
+                self.report_skuwise[source_store][dest_store][sku] = qty
+        else:
+            self.report_skuwise[source_store] = {}
+            self.report_skuwise[source_store][dest_store] = {}
+            self.report_skuwise[source_store][dest_store][sku] = qty
 
 
     def perform_ist(self, dest_store, source_store, transactions, total_transfers):
@@ -257,11 +291,11 @@ class CSP_Prob(Strategy):
 
             #Store the tx source, dest wise in report
             date = datetime.date(datetime.now()).strftime("%d/%m/%Y")
-            self.report_skuwise.append([date, self.reverse_sku_map[tx[0]], self.reverse_store_map[source_store], self.reverse_store_map[dest_store], tx[1]])
-
+            self.add_to_report(self.reverse_store_map[source_store], self.reverse_store_map[dest_store], self.reverse_sku_map[tx[0]], tx[1])
+        
         #Update transfer
         self.transfer[source_store, dest_store] += total_transfers
-        self.report_summary.append([date, self.reverse_store_map[source_store], self.reverse_store_map[dest_store], str(total_transfers)])
+
         #mini_report[..., (date, source_store, dest_store, sku, qty),...]
         return True
 

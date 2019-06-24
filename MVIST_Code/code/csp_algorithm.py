@@ -209,6 +209,7 @@ class CSP(Strategy):
         shortage[sku,store]
         transfer[store, store]
         """
+        total = 0
         for tx in transactions: 
             #Update Inventory
             self.inventory[tx[0], dest_store]  += tx[1]
@@ -225,10 +226,11 @@ class CSP(Strategy):
             #Store the tx source, dest wise in report
             date = datetime.date(datetime.now()).strftime("%d/%m/%Y")
             self.report_skuwise.append([date, self.reverse_sku_map[tx[0]], self.reverse_store_map[source_store], self.reverse_store_map[dest_store], tx[1]])
+            total += tx[1]
 
         #Update transfer
-        self.transfer[source_store, dest_store] += total_transfers
-        self.report_summary.append([date, self.reverse_store_map[source_store], self.reverse_store_map[dest_store], str(total_transfers)])
+        self.transfer[source_store, dest_store] += total
+        self.report_summary.append([date, self.reverse_store_map[source_store], self.reverse_store_map[dest_store], str(total)])
         
         #mini_report[..., (date, source_store, dest_store, sku, qty),...]
         return True
